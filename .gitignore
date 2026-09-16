@@ -1,0 +1,11 @@
+# Local Claude/browser artifacts
+.claude/
+
+# Local reports and archives
+report/
+*.zip
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/

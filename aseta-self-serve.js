@@ -84,6 +84,8 @@
     const body = document.querySelector('#demo-body');
     if (!body) return;
     document.querySelectorAll('[data-demo-view]').forEach((b) => b.classList.toggle('active', b.dataset.demoView === demoState.view));
+    const pageTitle = document.querySelector('#demo-page-title');
+    if (pageTitle) pageTitle.textContent = ({ dashboard: 'Dashboard', assets: 'Aset', workorders: 'Work order', preventive: 'Preventive' })[demoState.view];
     if (demoState.view === 'dashboard') {
       const h = healthPct();
       body.innerHTML = `

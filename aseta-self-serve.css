@@ -29,9 +29,17 @@
 .dd-list{padding:20px 22px;border:1px solid #e1e7ef;border-radius:11px;background:#fff;box-shadow:0 8px 26px rgba(25,48,83,.04)}
 .dd-list-head{margin:0 0 12px;font-size:.98rem}
 .dd-list-head span{font-size:.76rem}
+.dd-list-heading{margin:0 0 16px;padding-bottom:14px;border-bottom:1px solid #e5eaf0}
+.dd-list-heading h3{margin:0 0 5px;color:#2d3748;font-size:1rem;font-weight:700}
+.dd-list-heading p{margin:0;color:#73849d;font-size:.78rem;line-height:1.5}
 .dd-row{gap:13px;padding:14px 0;font-size:.84rem}
 .dd-row strong{font-size:.84rem}
 .dd-row small{display:block;margin-top:4px;color:#8391a4;font-size:.74rem}
+.dd-priority-row{display:grid;grid-template-columns:10px minmax(0,1fr) 112px;gap:16px;align-items:center;padding:17px 0}
+.dd-priority-row .dd-row-main{min-width:0}
+.dd-priority-row .dd-row-main strong,.dd-priority-row .dd-row-main small{overflow-wrap:anywhere}
+.dd-priority{min-width:88px;color:#2d3748;font-size:.84rem;text-align:right}
+@media(max-width:760px){.dd-priority-row{grid-template-columns:9px minmax(0,1fr) auto;gap:10px}.dd-priority{min-width:60px;font-size:.76rem}}
 .dd-asset,.dd-wo{border-radius:9px;background:#fff}
 .dd-asset{padding:15px 16px}
 .dd-asset strong,.dd-wo-top strong{font-size:.88rem}

@@ -28,7 +28,7 @@
     document.querySelector('#result-title').textContent = plan === 'Aseta Scale' ? 'Anda memiliki kebutuhan pengelolaan yang terstruktur.' : 'Anda dapat memulai dengan scope yang terukur.';
     document.querySelector('#result-copy').textContent = plan === 'Aseta Scale' ? 'Jumlah aset atau sebaran operasi Anda menunjukkan bahwa visibilitas terpusat, role, approval, dan reporting akan bernilai besar.' : 'Mulai dari asset register dan satu alur maintenance utama. Validasi manfaatnya sebelum memperluas cakupan ke lokasi atau modul lain.';
     document.querySelector('#result-plan').textContent = plan;
-    document.querySelector('#result-reason').textContent = plan === 'Aseta Scale' ? 'Prioritaskan dashboard lintas lokasi, work order, preventive, dan kontrol akses.' : maintenance ? 'Prioritaskan preventive schedule, work order, overdue, dan riwayat pekerjaan.' : 'Prioritaskan asset register, lokasi, dokumen, dan struktur data yang rapi.';
+    document.querySelector('#result-reason').textContent = plan === 'Aseta Scale' ? 'Prioritaskan dashboard lintas lokasi, maintenance, preventive, dan kontrol akses.' : maintenance ? 'Prioritaskan preventive schedule, maintenance, overdue, dan riwayat pekerjaan.' : 'Prioritaskan asset register, lokasi, dokumen, dan struktur data yang rapi.';
     result.hidden = false;
     result.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
@@ -85,19 +85,19 @@
     if (!body) return;
     document.querySelectorAll('[data-demo-view]').forEach((b) => b.classList.toggle('active', b.dataset.demoView === demoState.view));
     const pageTitle = document.querySelector('#demo-page-title');
-    if (pageTitle) pageTitle.textContent = ({ dashboard: 'Dashboard', assets: 'Aset', workorders: 'Work order', preventive: 'Preventive' })[demoState.view];
+    if (pageTitle) pageTitle.textContent = ({ dashboard: 'Dashboard', assets: 'Aset', workorders: 'Maintenance', preventive: 'Preventive' })[demoState.view];
     if (demoState.view === 'dashboard') {
       const h = healthPct();
       body.innerHTML = `
       <div class="dd-kpis">
         <div class="dd-kpi"><small>Asset health</small><strong class="${h < 80 ? 'warn' : 'ok'}">${h}%</strong><em>${h < 80 ? `${criticalAssets().length} aset kritis perlu aksi` : 'Semua terkendali'}</em></div>
-        <div class="dd-kpi"><small>Work order terbuka</small><strong class="${overdueWO().length ? 'warn' : 'ok'}">${openWO().length}</strong><em>${overdueWO().length ? `${overdueWO().length} overdue` : 'Tidak ada overdue'} · ${unassigned().length} belum ditugaskan</em></div>
+        <div class="dd-kpi"><small>Maintenance terbuka</small><strong class="${overdueWO().length ? 'warn' : 'ok'}">${openWO().length}</strong><em>${overdueWO().length ? `${overdueWO().length} overdue` : 'Tidak ada overdue'} · ${unassigned().length} belum ditugaskan</em></div>
         <div class="dd-kpi"><small>Cakupan PM</small><strong>${demoState.assets.length - noPmAssets().length}/${demoState.assets.length}</strong><em>${noPmAssets().length ? 'aset tanpa jadwal PM' : 'semua aset terjadwal'}</em></div>
       </div>
-      <div class="dd-callout"><b>Keputusan hari ini:</b> ${unassigned().length ? `tugaskan ${unassigned().map((w) => w.id).join(', ')} — aset kritis tidak boleh menunggu` : 'semua WO sudah tertangani'}${noPmAssets().length ? `; buat jadwal PM untuk ${noPmAssets().map((a) => a.name).join(', ')}` : ''}.</div>
-      <div class="dd-list"><div class="dd-list-head">Prioritas pekerjaan <span>urut criticality & SLA</span></div>
+      <div class="dd-callout"><b>Keputusan hari ini:</b> ${unassigned().length ? `tugaskan ${unassigned().map((w) => w.id).join(', ')} — aset kritis tidak boleh menunggu` : 'semua maintenance sudah tertangani'}${noPmAssets().length ? `; buat jadwal PM untuk ${noPmAssets().map((a) => a.name).join(', ')}` : ''}.</div>
+      <div class="dd-list"><div class="dd-list-heading"><h3>Prioritas maintenance</h3><p>Diurutkan berdasarkan tingkat criticality aset dan SLA pekerjaan.</p></div>
       ${openWO().sort((a, b) => (a.priority === 'Kritis' ? -1 : 1) - (b.priority === 'Kritis' ? -1 : 1)).slice(0, 4).map((w) => `
-        <div class="dd-row"><span class="status-dot ${w.due.includes('Overdue') ? 'red' : 'amber'}"></span><div><strong>${w.id} · ${escDemo(w.asset)}</strong><small>${w.due} · ${w.type} · ${w.tech}</small></div><b>${w.priority}</b></div>`).join('') || '<div class="dd-empty">Semua work order selesai ✓</div>'}
+        <div class="dd-row dd-priority-row"><span class="status-dot ${w.due.includes('Overdue') ? 'red' : 'amber'}"></span><div class="dd-row-main"><strong>${w.id} · ${escDemo(w.asset)}</strong><small>${w.due} · ${w.type} · ${w.tech}</small></div><b class="dd-priority">${w.priority}</b></div>`).join('') || '<div class="dd-empty">Semua maintenance selesai ✓</div>'}
       </div>`;
     } else if (demoState.view === 'assets') {
       body.innerHTML = `<div class="dd-list-head">Aset terdaftar <span>klik untuk detail</span></div>` + demoState.assets.map((a) => `
@@ -107,7 +107,7 @@
         <b class="chev">›</b>
       </button>`).join('');
     } else if (demoState.view === 'workorders') {
-      body.innerHTML = `<div class="dd-list-head">Antrean work order <span>status ikut berubah saat Anda menindaklanjuti</span></div>` + demoState.workOrders.map((w) => `
+      body.innerHTML = `<div class="dd-list-head">Daftar maintenance <span>status ikut berubah saat Anda menindaklanjuti</span></div>` + demoState.workOrders.map((w) => `
       <div class="dd-wo ${w.status}">
         <div class="dd-wo-top"><span class="status-dot ${w.status === 'done' ? 'green' : w.due.includes('Overdue') ? 'red' : 'amber'}"></span><div><strong>${w.id} · ${escDemo(w.asset)}</strong><small>${w.due} · ${w.type} · Teknisi: ${escDemo(w.tech)}</small></div><b>${w.status === 'done' ? 'Selesai ✓' : escDemo(w.priority)}</b></div>
         <p>${escDemo(w.note)}</p>
@@ -133,7 +133,7 @@
       <div class="dd-callout"><b>Insight:</b> ${a.pm.includes('Belum') ? `aset ini belum punya jadwal PM padahal riwayat ${a.history.filter((x) => x.includes('Corrective')).length}× corrective — ini pola breakdown berulang.` : a.condition < 70 ? `kondisi menurun meski PM aktif — evaluasi interval PM atau siapkan penggantian komponen.` : `PM aktif dan kondisi stabil — pertahankan interval saat ini.`}</div></div>`;
       body.querySelector('[data-back]').addEventListener('click', renderDemo);
     }));
-    // aksi work order
+    // aksi maintenance
     body.querySelectorAll('[data-assign]').forEach((btn) => btn.addEventListener('click', () => {
       const [id, tech] = btn.dataset.assign.split(':');
       const w = demoState.workOrders.find((x) => x.id === id);

@@ -203,26 +203,142 @@
   };
   financialInputs.forEach((input) => input?.addEventListener('input', updateFinancial));
 
-  // Salin ringkasan simulasi
-  document.querySelector('#copy-summary')?.addEventListener('click', () => {
-    const lines = [
-      'Ringkasan simulasi dampak operasional (Aseta)',
-      '',
-      `Downtime per bulan: ${fin.downtime} jam`,
-      `Biaya per jam downtime: ${fmtRp(fin.costPerHour)}`,
-      `Perbaikan reaktif per bulan: ${fmtRp(fin.repair)}`,
-      `Target pengurangan breakdown: ${fin.reduce}%`,
-      '',
-      `Estimasi kerugian per tahun: ${fmtRp(fin.downtime * fin.costPerHour * 12 + fin.repair * 12)}`,
-      `Potensi penghematan per tahun: ${fmtRp((fin.downtime * fin.costPerHour * 12 + fin.repair * 12) * fin.reduce / 100)}`,
-      '',
-      'Catatan: simulasi berbasis input internal, bukan jaminan hasil atau penawaran harga.'
-    ];
-    navigator.clipboard?.writeText(lines.join('\n')).then(() => {
-      const status = document.querySelector('#copy-status');
+  // Unduh laporan simulasi sebagai PDF satu halaman
+  document.querySelector('#download-pdf')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    const status = document.querySelector('#download-status');
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Menyiapkan PDF…';
+    status.hidden = true;
+    try {
+      await document.fonts?.ready;
+      const canvas = document.createElement('canvas');
+      canvas.width = 1860;
+      canvas.height = 2631;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(1.5, 1.5);
+      const colors = { navy: '#173b78', blue: '#1c4488', gold: '#f3b000', ink: '#263449', muted: '#718096', line: '#dce4ee', pale: '#f4f7fb', white: '#ffffff' };
+      const annualLoss = fin.downtime * fin.costPerHour * 12 + fin.repair * 12;
+      const annualSaving = annualLoss * fin.reduce / 100;
+      const date = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+      const roundRect = (x, y, w, h, r, fill, stroke) => {
+        ctx.beginPath(); ctx.roundRect(x, y, w, h, r);
+        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+        if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); }
+        ctx.beginPath();
+      };
+      const text = (value, x, y, size, color = colors.ink, weight = 400) => {
+        ctx.font = `${weight} ${size}px Inter, Arial, sans-serif`;
+        ctx.fillStyle = color;
+        ctx.fillText(value, x, y);
+      };
+      const paragraph = (value, x, y, maxWidth, lineHeight, size, color = colors.muted, weight = 400) => {
+        ctx.font = `${weight} ${size}px Inter, Arial, sans-serif`;
+        ctx.fillStyle = color;
+        let line = '';
+        let row = 0;
+        value.split(' ').forEach((word) => {
+          const next = line ? `${line} ${word}` : word;
+          if (ctx.measureText(next).width > maxWidth && line) {
+            ctx.fillText(line, x, y + row++ * lineHeight);
+            line = word;
+          } else line = next;
+        });
+        if (line) ctx.fillText(line, x, y + row * lineHeight);
+        return row + 1;
+      };
+      const money = (value) => fmtRp(value);
+      ctx.fillStyle = colors.white;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = colors.navy;
+      ctx.fillRect(0, 0, 1240, 390);
+      ctx.fillStyle = colors.gold;
+      ctx.fillRect(0, 386, canvas.width, 6);
+      roundRect(92, 70, 56, 56, 14, colors.gold);
+      text('A', 110, 109, 34, colors.navy, 800);
+      text('ASETA  |  ASSET & MAINTENANCE MANAGEMENT', 170, 103, 20, '#d9e5f7', 700);
+      text('Ringkasan Simulasi', 92, 205, 49, colors.white, 700);
+      text('Dampak finansial operasional', 92, 253, 27, '#d9e5f7', 400);
+      text(`Dibuat ${date}`, 92, 322, 20, '#d9e5f7', 400);
+      text('HASIL UTAMA', 92, 454, 18, colors.blue, 700);
+      roundRect(92, 482, 506, 218, 18, colors.pale, colors.line);
+      roundRect(620, 482, 528, 218, 18, '#fff9e9', '#f4dfaa');
+      text('Estimasi kerugian operasi / tahun', 122, 535, 19, colors.muted, 500);
+      text(money(annualLoss), 122, 603, 48, '#b3543f', 700);
+      paragraph('Berdasarkan downtime dan biaya perbaikan reaktif yang Anda masukkan.', 122, 650, 435, 27, 17);
+      text('Potensi penghematan / tahun', 650, 535, 19, colors.muted, 500);
+      text(money(annualSaving), 650, 603, 48, colors.blue, 700);
+      paragraph(`Jika target pengurangan breakdown ${fin.reduce}% tercapai melalui preventive maintenance.`, 650, 650, 455, 27, 17);
+      text('PROYEKSI PENGHEMATAN', 92, 762, 18, colors.blue, 700);
+      roundRect(92, 790, 1056, 112, 16, colors.white, colors.line);
+      ctx.fillStyle = colors.line; ctx.fillRect(620, 790, 2, 112);
+      text('Per bulan', 126, 833, 18, colors.muted, 500);
+      text(money(annualSaving / 12), 126, 873, 28, colors.ink, 700);
+      text('Akumulasi 3 tahun', 664, 833, 18, colors.muted, 500);
+      text(money(annualSaving * 3), 664, 873, 28, colors.ink, 700);
+      text('ASUMSI SIMULASI', 92, 975, 18, colors.blue, 700);
+      const rows = [
+        ['Downtime operasi per bulan', `${fin.downtime} jam`],
+        ['Biaya per jam downtime', money(fin.costPerHour)],
+        ['Biaya perbaikan reaktif per bulan', money(fin.repair)],
+        ['Target pengurangan breakdown', `${fin.reduce}%`]
+      ];
+      rows.forEach(([label, value], index) => {
+        const y = 1019 + index * 66;
+        if (index % 2 === 0) { ctx.fillStyle = colors.pale; ctx.fillRect(92, y - 31, 1056, 58); }
+        text(label, 116, y + 5, 19, colors.ink, 500);
+        ctx.font = '700 19px Inter, Arial, sans-serif';
+        ctx.fillStyle = colors.ink;
+        ctx.textAlign = 'right'; ctx.fillText(value, 1118, y + 5); ctx.textAlign = 'left';
+      });
+      text('METODE PERHITUNGAN', 92, 1320, 18, colors.blue, 700);
+      paragraph('Kerugian tahunan = (downtime bulanan × biaya downtime per jam × 12) + (biaya perbaikan reaktif bulanan × 12). Potensi penghematan = kerugian tahunan × target pengurangan breakdown.', 92, 1360, 1040, 31, 18, colors.muted);
+      ctx.strokeStyle = colors.line; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(92, 1472); ctx.lineTo(1148, 1472); ctx.stroke();
+      text('CATATAN', 92, 1513, 15, colors.blue, 700);
+      paragraph('Dokumen ini adalah simulasi indikatif berdasarkan input pengguna, bukan jaminan hasil, audit finansial, maupun penawaran harga. Validasi asumsi dengan data operasi aktual sebelum mengambil keputusan.', 92, 1548, 1056, 27, 15, colors.muted);
+      text('Aseta · Kelola aset dengan data. Jaga operasi tetap berjalan.', 92, 1695, 15, colors.navy, 700);
+
+      const jpeg = Uint8Array.from(atob(canvas.toDataURL('image/jpeg', 0.94).split(',')[1]), (char) => char.charCodeAt(0));
+      const encoder = new TextEncoder();
+      const chunks = [];
+      let length = 0;
+      const append = (chunk) => { chunks.push(chunk); length += chunk.length; };
+      const addText = (value) => { const chunk = encoder.encode(value); append(chunk); if (chunk.length !== value.length) throw new Error('Karakter di luar rentang ASCII pada struktur PDF.'); };
+      addText('%PDF-1.4\n');
+      const offsets = [0];
+      const object = (id, content) => { offsets[id] = length; addText(`${id} 0 obj\n${content}\nendobj\n`); };
+      object(1, '<< /Type /Catalog /Pages 2 0 R >>');
+      object(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+      object(3, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>');
+      offsets[4] = length;
+      addText(`4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${canvas.width} /Height ${canvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`);
+      append(jpeg);
+      addText('\nendstream\nendobj\n');
+      const stream = encoder.encode('q\n595.28 0 0 841.89 0 0 cm\n/Im0 Do\nQ\n');
+      offsets[5] = length;
+      addText(`5 0 obj\n<< /Length ${stream.length} >>\nstream\n`);
+      append(stream);
+      addText('endstream\nendobj\n');
+      const xref = length;
+      addText(`xref\n0 6\n0000000000 65535 f \n${offsets.slice(1).map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+      const pdf = new Blob(chunks, { type: 'application/pdf' });
+      const url = URL.createObjectURL(pdf);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `aseta-ringkasan-simulasi-${new Date().toISOString().slice(0, 10)}.pdf`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      status.textContent = 'PDF berhasil diunduh ✓';
       status.hidden = false;
-      setTimeout(() => { status.hidden = true; }, 2500);
-    });
+    } catch (error) {
+      console.error('Gagal membuat laporan PDF:', error);
+      status.textContent = 'PDF belum berhasil dibuat. Coba lagi.';
+      status.hidden = false;
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
   });
 
   const updateCalculator = () => {

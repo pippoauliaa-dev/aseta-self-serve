@@ -167,6 +167,19 @@
   };
   const fmtHours = (h) => (h >= 1e6 ? `${(h / 1e6).toLocaleString('id-ID', { maximumFractionDigits: 1 })} juta jam` : h >= 1000 ? `${(h / 1000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} ribu jam` : `${Math.round(h).toLocaleString('id-ID')} jam`);
 
+  document.querySelector('#sales-contact-form')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const message = [
+      'Halo tim Aseta, saya ingin mengetahui lebih lanjut tentang Aseta.',
+      '',
+      `Nama: ${data.get('name').trim()}`,
+      `Email perusahaan: ${data.get('email').trim()}`,
+      `Nama perusahaan: ${data.get('company').trim()}`
+    ].join('\n');
+    window.open(`https://wa.me/6281217984959?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+  });
+
   // Tab simulator
   document.querySelectorAll('[data-calc-tab]').forEach((button) => button.addEventListener('click', () => {
     document.querySelectorAll('[data-calc-tab]').forEach((tab) => tab.classList.toggle('active', tab === button));

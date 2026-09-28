@@ -264,18 +264,18 @@
       text('HASIL UTAMA', 92, 454, 18, colors.blue, 700);
       roundRect(92, 482, 506, 218, 18, colors.pale, colors.line);
       roundRect(620, 482, 528, 218, 18, '#fff9e9', '#f4dfaa');
-      text('Estimasi kerugian operasi / tahun', 122, 535, 19, colors.muted, 500);
+      text('Estimasi kerugian tahunan berdasarkan input', 122, 535, 19, colors.muted, 500);
       text(money(annualLoss), 122, 603, 48, '#b3543f', 700);
-      paragraph('Berdasarkan downtime dan biaya perbaikan reaktif yang Anda masukkan.', 122, 650, 435, 27, 17);
-      text('Potensi penghematan / tahun', 650, 535, 19, colors.muted, 500);
+      paragraph('Proyeksi berdasarkan downtime dan biaya perbaikan reaktif yang Anda masukkan.', 122, 650, 435, 27, 17);
+      text('Potensi penghematan simulasi / tahun', 650, 535, 19, colors.muted, 500);
       text(money(annualSaving), 650, 603, 48, colors.blue, 700);
-      paragraph(`Jika target pengurangan breakdown ${fin.reduce}% tercapai melalui preventive maintenance.`, 650, 650, 455, 27, 17);
+      paragraph(`Proyeksi jika target pengurangan breakdown ${fin.reduce}% tercapai melalui preventive maintenance.`, 650, 650, 455, 27, 17);
       text('PROYEKSI PENGHEMATAN', 92, 762, 18, colors.blue, 700);
       roundRect(92, 790, 1056, 112, 16, colors.white, colors.line);
       ctx.fillStyle = colors.line; ctx.fillRect(620, 790, 2, 112);
-      text('Per bulan', 126, 833, 18, colors.muted, 500);
+      text('Proyeksi per bulan', 126, 833, 18, colors.muted, 500);
       text(money(annualSaving / 12), 126, 873, 28, colors.ink, 700);
-      text('Akumulasi 3 tahun', 664, 833, 18, colors.muted, 500);
+      text('Proyeksi akumulasi 3 tahun', 664, 833, 18, colors.muted, 500);
       text(money(annualSaving * 3), 664, 873, 28, colors.ink, 700);
       text('ASUMSI SIMULASI', 92, 975, 18, colors.blue, 700);
       const rows = [
@@ -296,7 +296,7 @@
       paragraph('Kerugian tahunan = (downtime bulanan × biaya downtime per jam × 12) + (biaya perbaikan reaktif bulanan × 12). Potensi penghematan = kerugian tahunan × target pengurangan breakdown.', 92, 1360, 1040, 31, 18, colors.muted);
       ctx.strokeStyle = colors.line; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(92, 1472); ctx.lineTo(1148, 1472); ctx.stroke();
       text('CATATAN', 92, 1513, 15, colors.blue, 700);
-      paragraph('Dokumen ini adalah simulasi indikatif berdasarkan input pengguna, bukan jaminan hasil, audit finansial, maupun penawaran harga. Validasi asumsi dengan data operasi aktual sebelum mengambil keputusan.', 92, 1548, 1056, 27, 15, colors.muted);
+      paragraph('Angka dalam dokumen ini adalah simulasi indikatif berdasarkan input dan asumsi pengguna, bukan hasil aktual Aseta atau pelanggan, catatan kerugian atau penghematan aktual, jaminan hasil, audit finansial, maupun penawaran harga. Validasi asumsi dengan data operasi aktual sebelum mengambil keputusan.', 92, 1548, 1056, 27, 15, colors.muted);
       text('Aseta · Kelola aset dengan data. Jaga operasi tetap berjalan.', 92, 1695, 15, colors.navy, 700);
 
       const jpeg = Uint8Array.from(atob(canvas.toDataURL('image/jpeg', 0.94).split(',')[1]), (char) => char.charCodeAt(0));

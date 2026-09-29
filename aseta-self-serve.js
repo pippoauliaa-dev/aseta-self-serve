@@ -166,7 +166,38 @@
     return `Rp${n.toLocaleString('id-ID')}`;
   };
   const fmtHours = (h) => (h >= 1e6 ? `${(h / 1e6).toLocaleString('id-ID', { maximumFractionDigits: 1 })} juta jam` : h >= 1000 ? `${(h / 1000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} ribu jam` : `${Math.round(h).toLocaleString('id-ID')} jam`);
+  const leadDialog = document.querySelector('#lead-dialog');
+  const leadForm = document.querySelector('#simulator-lead-form');
+  const leadError = document.querySelector('#lead-error');
+  const leadNextStep = document.querySelector('#lead-next-step');
+  const leadShareButton = document.querySelector('#share-whatsapp');
+  const leadSharePdfButton = document.querySelector('#share-pdf');
+  const leadShareStatus = document.querySelector('#share-status');
+  const leadPhone = '6281217984959';
+  let currentPdf = null;
+  let leadShareText = '';
+  let retryLeadRequestId = '';
 
+  const whatsappUrl = () => `https://wa.me/${leadPhone}?text=${encodeURIComponent(leadShareText)}`;
+  document.querySelector('#download-pdf')?.addEventListener('click', () => {
+    leadError.hidden = true;
+    leadNextStep.hidden = true;
+    leadForm.hidden = false;
+    leadDialog.showModal();
+    leadForm.querySelector('[name="name"]').focus();
+  });
+  document.querySelector('[data-close-lead]')?.addEventListener('click', () => leadDialog.close());
+  leadShareButton?.addEventListener('click', () => window.open(whatsappUrl(), '_blank', 'noopener,noreferrer'));
+  leadSharePdfButton?.addEventListener('click', async () => {
+    if (!currentPdf) return;
+    const file = new File([currentPdf], `aseta-ringkasan-simulasi-${new Date().toISOString().slice(0, 10)}.pdf`, { type: 'application/pdf' });
+    try {
+      await navigator.share({ files: [file], text: leadShareText, title: 'Hasil simulasi Aseta' });
+      leadShareStatus.textContent = 'Pilih WhatsApp pada menu berbagi untuk mengirim PDF dan sapaan.';
+    } catch (error) {
+      if (error.name !== 'AbortError') leadShareStatus.textContent = 'Berbagi file tidak tersedia. PDF sudah diunduh; lampirkan manual di WhatsApp.';
+    }
+  });
   document.querySelector('#sales-contact-form')?.addEventListener('submit', (event) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -216,17 +247,9 @@
   };
   financialInputs.forEach((input) => input?.addEventListener('input', updateFinancial));
 
-  // Unduh laporan simulasi sebagai PDF satu halaman
-  document.querySelector('#download-pdf')?.addEventListener('click', async (event) => {
-    const button = event.currentTarget;
-    const status = document.querySelector('#download-status');
-    const originalLabel = button.textContent;
-    button.disabled = true;
-    button.textContent = 'Menyiapkan PDF…';
-    status.hidden = true;
-    try {
-      await document.fonts?.ready;
-      const canvas = document.createElement('canvas');
+  const generatePdf = async () => {
+    await document.fonts?.ready;
+    const canvas = document.createElement('canvas');
       canvas.width = 1860;
       canvas.height = 2631;
       const ctx = canvas.getContext('2d');
@@ -335,20 +358,118 @@
       addText('endstream\nendobj\n');
       const xref = length;
       addText(`xref\n0 6\n0000000000 65535 f \n${offsets.slice(1).map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
-      const pdf = new Blob(chunks, { type: 'application/pdf' });
-      const url = URL.createObjectURL(pdf);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `aseta-ringkasan-simulasi-${new Date().toISOString().slice(0, 10)}.pdf`;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      status.textContent = 'PDF berhasil diunduh ✓';
+      return new Blob(chunks, { type: 'application/pdf' });
+  };
+  const downloadPdf = (pdf) => {
+    const url = URL.createObjectURL(pdf);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `aseta-ringkasan-simulasi-${new Date().toISOString().slice(0, 10)}.pdf`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const makeLeadRequestId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const submitLeadToSheet = (data, requestId) => new Promise((resolve, reject) => {
+    const endpoint = leadForm.dataset.leadEndpoint.trim();
+    if (!endpoint) { reject(new Error('Integrasi Google Sheets belum dikonfigurasi.')); return; }
+    let scriptUrl;
+    try { scriptUrl = new URL(endpoint, window.location.href); }
+    catch (error) { reject(new Error('URL Google Apps Script tidak valid. Periksa konfigurasi integrasi.')); return; }
+    if (!['script.google.com', '127.0.0.1', 'localhost'].includes(scriptUrl.hostname) || (scriptUrl.hostname === 'script.google.com' && scriptUrl.protocol !== 'https:')) {
+      reject(new Error('URL Google Apps Script tidak valid. Periksa konfigurasi integrasi.')); return;
+    }
+    const attemptId = makeLeadRequestId();
+    const frame = document.createElement('iframe');
+    const form = document.createElement('form');
+    const cleanup = () => { clearTimeout(timeout); window.removeEventListener('message', onMessage); frame.remove(); form.remove(); };
+    const timeout = setTimeout(() => { cleanup(); reject(new Error('Respons Google Sheets tidak diterima. Coba lagi.')); }, 20000);
+    const onMessage = (event) => {
+      const origin = new URL(event.origin);
+      if (event.source === window || !(origin.origin === scriptUrl.origin || origin.hostname.endsWith('-script.googleusercontent.com'))) return;
+      const result = event.data;
+      if (result?.type !== 'aseta-lead-result' || result.requestId !== requestId || result.attemptId !== attemptId) return;
+      cleanup();
+      if (result.status === 'success') { retryLeadRequestId = ''; resolve(); }
+      else reject(new Error('Data belum tersimpan di Google Sheets. Coba lagi.'));
+    };
+    frame.name = `aseta-lead-${attemptId}`;
+    frame.hidden = true;
+    form.action = scriptUrl.href;
+    form.method = 'post';
+    form.target = frame.name;
+    form.acceptCharset = 'UTF-8';
+    form.hidden = true;
+    form.action = scriptUrl.href;
+    form.method = 'post';
+    form.target = frame.name;
+    const fields = {
+      ...data,
+      request_id: requestId,
+      attempt_id: attemptId,
+      website: '',
+      consent: 'yes',
+      downtime: String(fin.downtime),
+      downtime_cost_per_hour: String(fin.costPerHour),
+      reactive_repair_cost_monthly: String(fin.repair),
+      breakdown_reduction_target: String(fin.reduce),
+      annual_loss: String(fin.downtime * fin.costPerHour * 12 + fin.repair * 12),
+      annual_saving: String((fin.downtime * fin.costPerHour * 12 + fin.repair * 12) * fin.reduce / 100),
+      source: window.location.href,
+      submitted_at: new Date().toISOString()
+    };
+    Object.entries(fields).forEach(([name, value]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden'; input.name = name; input.value = value;
+      form.append(input);
+    });
+    window.addEventListener('message', onMessage);
+    document.body.append(frame, form);
+    form.submit();
+  });
+  leadForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!leadForm.reportValidity()) return;
+    const button = document.querySelector('#lead-submit');
+    const originalLabel = button.textContent;
+    const status = document.querySelector('#download-status');
+    const data = Object.fromEntries(new FormData(leadForm).entries());
+    const requestId = retryLeadRequestId || makeLeadRequestId();
+    leadError.hidden = true;
+    button.disabled = true;
+    button.textContent = 'Menyimpan data…';
+    try {
+      await submitLeadToSheet(data, requestId);
+      button.textContent = 'Menyiapkan PDF…';
+      try {
+        currentPdf = await generatePdf();
+      } catch (error) {
+        retryLeadRequestId = requestId;
+        throw new Error('Data sudah tersimpan. PDF gagal dibuat, silakan kirim ulang untuk mencoba kembali.');
+      }
+      downloadPdf(currentPdf);
+      const message = [
+        'Halo tim Aseta, saya baru saja menyelesaikan simulasi dampak downtime dan ingin berdiskusi lebih lanjut.',
+        '',
+        `Nama: ${data.name.trim()}`,
+        `Perusahaan: ${data.company.trim()}`,
+        `WhatsApp: ${data.phone.trim()}`,
+        `Estimasi kerugian tahunan: ${fmtRp(fin.downtime * fin.costPerHour * 12 + fin.repair * 12)}`,
+        `Potensi penghematan simulasi / tahun: ${fmtRp((fin.downtime * fin.costPerHour * 12 + fin.repair * 12) * fin.reduce / 100)}`,
+        '',
+        'Saya akan melampirkan PDF hasil simulasi pada chat ini.'
+      ].join('\n');
+      leadShareText = message;
+      leadForm.hidden = true;
+      leadNextStep.hidden = false;
+      if (navigator.canShare?.({ files: [new File([currentPdf], 'aseta-ringkasan-simulasi.pdf', { type: 'application/pdf' })] })) {
+        leadSharePdfButton.hidden = false;
+      }
+      status.textContent = 'Lead tersimpan dan PDF berhasil diunduh ✓';
       status.hidden = false;
     } catch (error) {
-      console.error('Gagal membuat laporan PDF:', error);
-      status.textContent = 'PDF belum berhasil dibuat. Coba lagi.';
-      status.hidden = false;
-    } finally {
+      if (error.message.startsWith('Data belum tersimpan di Google Sheets') || error.message.startsWith('Respons Google Sheets tidak diterima')) retryLeadRequestId = requestId;
+      leadError.textContent = error.message || 'Data belum berhasil disimpan. Silakan coba lagi.';
+      leadError.hidden = false;
       button.disabled = false;
       button.textContent = originalLabel;
     }

@@ -194,6 +194,14 @@
     phoneInput.value = digits;
   });
   const whatsappUrl = () => `https://wa.me/${leadPhone}?text=${encodeURIComponent(leadShareText)}`;
+  const returnToLanding = () => {
+    leadDialog.close();
+    window.history.replaceState(null, '', '#top');
+    const scrollBehavior = document.documentElement.style.scrollBehavior;
+    document.documentElement.style.scrollBehavior = 'auto';
+    window.scrollTo(0, 0);
+    document.documentElement.style.scrollBehavior = scrollBehavior;
+  };
   document.querySelector('#download-pdf')?.addEventListener('click', () => {
     leadError.hidden = true;
     leadNextStep.hidden = true;
@@ -202,13 +210,17 @@
     leadForm.querySelector('[name="name"]').focus();
   });
   document.querySelector('[data-close-lead]')?.addEventListener('click', () => leadDialog.close());
-  leadShareButton?.addEventListener('click', () => window.open(whatsappUrl(), '_blank', 'noopener,noreferrer'));
+  leadShareButton?.addEventListener('click', () => {
+    window.open(whatsappUrl(), '_blank', 'noopener,noreferrer');
+    returnToLanding();
+  });
   leadSharePdfButton?.addEventListener('click', async () => {
     if (!currentPdf) return;
     const file = new File([currentPdf], `aseta-ringkasan-simulasi-${new Date().toISOString().slice(0, 10)}.pdf`, { type: 'application/pdf' });
     try {
       await navigator.share({ files: [file], text: leadShareText, title: 'Hasil simulasi Aseta' });
       leadShareStatus.textContent = 'Pilih WhatsApp pada menu berbagi untuk mengirim PDF dan sapaan.';
+      returnToLanding();
     } catch (error) {
       if (error.name !== 'AbortError') leadShareStatus.textContent = 'Berbagi file tidak tersedia. PDF sudah diunduh; lampirkan manual di WhatsApp.';
     }

@@ -135,6 +135,9 @@ class LeadFlowTests(unittest.TestCase):
         self.assertEqual(LeadFlowHandler.payload['position'], ['Manajer Maintenance'])
         with self.page.expect_popup() as popup:self.page.locator('#share-whatsapp').click()
         message=parse_qs(urlparse(popup.value.url).query)['text'][0];self.assertIn(values['name'],message);self.assertIn('lampirkan pdf',message.lower())
+        self.assertFalse(self.page.locator('#lead-dialog').evaluate('(d)=>d.open'))
+        self.assertEqual(self.page.evaluate('location.hash'), '#top')
+        self.assertLessEqual(self.page.evaluate('window.scrollY'), 1)
 
     def test_failed_sheet_save_never_downloads_pdf(self):
         LeadFlowHandler.status='error';self.open_form();self.fill_form();self.page.locator('#lead-submit').click()

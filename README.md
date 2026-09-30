@@ -28,7 +28,7 @@ Semua kalkulasi berjalan di browser. Data yang digunakan pada dashboard adalah d
 
 Alur form simulator mencatat lead sebelum PDF diunduh. Siapkan endpoint-nya satu kali:
 
-1. Buat Google Sheet baru khusus lead. Salin ID dari URL antara `/d/` dan `/edit`.
+1. Siapkan Google Sheet khusus lead. Salin ID dari URL antara `/d/` dan `/edit`. Sheet yang berisi tab `Leads` lama akan dimigrasikan untuk menyisipkan kolom `Jabatan` dan menormalkan nomor WhatsApp lama ke `62...`; data lainnya dipertahankan.
 2. Buka <https://script.google.com>, buat proyek Apps Script, lalu ganti isi `Code.gs` dengan `google-apps-script/Code.gs` dari repo ini.
 3. Tambahkan file HTML baru bernama `Response`, lalu salin isi `google-apps-script/Response.html`.
 4. Buka **Project Settings → Script Properties → Add script property**. Isi `LEADS_SHEET_ID` sebagai property dan ID sheet sebagai value.
@@ -39,7 +39,7 @@ Alur form simulator mencatat lead sebelum PDF diunduh. Siapkan endpoint-nya satu
 
 Endpoint memeriksa asal situs dan persetujuan, mengunci penulisan paralel, mencegah duplikasi saat retry, menetralkan input formula spreadsheet, dan membalas lewat iframe terbatas asal. Endpoint publik berpotensi disalahgunakan untuk spam atau kuota Apps Script; pantau Sheet/Apps Script dan hentikan deployment jika trafik mencurigakan.
 
-Nomor WhatsApp penerima saat ini memakai nomor tim Aseta yang sudah ada di halaman. Browser membuka chat dengan sapaan terisi. Di perangkat yang mendukung Web Share API untuk berbagi file, customer juga dapat memilih **Bagikan PDF ke WhatsApp**; WhatsApp tetap meminta customer memilih chat dan mengirim. Jika fitur share file tidak tersedia, customer melampirkan PDF yang sudah diunduh secara manual.
+Form meminta jabatan dan menampilkan prefix WhatsApp `+62`; angka yang dikirim dan disimpan dinormalisasi ke `62...` agar tidak kehilangan angka nol awal saat dikonversi spreadsheet. Nomor WhatsApp penerima saat ini memakai nomor tim Aseta yang sudah ada di halaman. Browser membuka chat dengan sapaan terisi. Di perangkat yang mendukung Web Share API untuk berbagi file, customer juga dapat memilih **Bagikan PDF ke WhatsApp**; WhatsApp tetap meminta customer memilih chat dan mengirim. Jika fitur share file tidak tersedia, customer melampirkan PDF yang sudah diunduh secara manual.
 
 ## Tes alur lead
 

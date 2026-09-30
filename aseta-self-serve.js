@@ -178,6 +178,21 @@
   let leadShareText = '';
   let retryLeadRequestId = '';
 
+  const normalizePhone = (value) => {
+    let digits = value.replace(/\D/g, '');
+    if (digits.startsWith('0062')) digits = digits.slice(2);
+    if (digits.startsWith('62')) digits = digits.slice(2);
+    if (digits.startsWith('0')) digits = digits.slice(1);
+    return `62${digits}`;
+  };
+  const phoneInput = leadForm.querySelector('[name="phone"]');
+  phoneInput.addEventListener('input', () => {
+    let digits = phoneInput.value.replace(/\D/g, '');
+    if (digits.startsWith('0062')) digits = digits.slice(4);
+    else if (digits.startsWith('62')) digits = digits.slice(2);
+    else if (digits.startsWith('0')) digits = digits.slice(1);
+    phoneInput.value = digits;
+  });
   const whatsappUrl = () => `https://wa.me/${leadPhone}?text=${encodeURIComponent(leadShareText)}`;
   document.querySelector('#download-pdf')?.addEventListener('click', () => {
     leadError.hidden = true;
@@ -399,11 +414,9 @@
     form.target = frame.name;
     form.acceptCharset = 'UTF-8';
     form.hidden = true;
-    form.action = scriptUrl.href;
-    form.method = 'post';
-    form.target = frame.name;
     const fields = {
       ...data,
+      phone: normalizePhone(data.phone),
       request_id: requestId,
       attempt_id: attemptId,
       website: '',
@@ -452,7 +465,8 @@
         '',
         `Nama: ${data.name.trim()}`,
         `Perusahaan: ${data.company.trim()}`,
-        `WhatsApp: ${data.phone.trim()}`,
+        `Jabatan: ${data.position.trim()}`,
+        `WhatsApp: +${normalizePhone(data.phone)}`,
         `Estimasi kerugian tahunan: ${fmtRp(fin.downtime * fin.costPerHour * 12 + fin.repair * 12)}`,
         `Potensi penghematan simulasi / tahun: ${fmtRp((fin.downtime * fin.costPerHour * 12 + fin.repair * 12) * fin.reduce / 100)}`,
         '',

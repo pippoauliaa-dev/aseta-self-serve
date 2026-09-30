@@ -2,7 +2,7 @@ const SHEET_NAME = 'Leads';
 const SCRIPT_PROPERTY_SHEET_ID = 'LEADS_SHEET_ID';
 
 const HEADERS = [
-  'Timestamp', 'Nama', 'Email perusahaan', 'Perusahaan', 'WhatsApp', 'Persetujuan',
+  'Timestamp', 'Nama', 'Email perusahaan', 'Perusahaan', 'Jabatan', 'WhatsApp', 'Persetujuan',
   'Downtime per bulan (jam)', 'Biaya downtime per jam (Rp)', 'Biaya perbaikan reaktif per bulan (Rp)',
   'Target pengurangan breakdown (%)', 'Estimasi kerugian tahunan (Rp)',
   'Potensi penghematan simulasi per tahun (Rp)', 'Source', 'Request ID'
@@ -14,7 +14,7 @@ function doPost(e) {
   const attemptId = String(params.attempt_id || '').trim();
   const targetOrigin = allowedOrigin(params.source);
   if (!targetOrigin) return HtmlService.createHtmlOutput('Origin tidak diizinkan.');
-  if (!requestId || !attemptId || !params.name || !params.email || !params.company || !params.phone || params.consent !== 'yes') {
+  if (!requestId || !attemptId || !params.name || !params.email || !params.company || !params.position || !params.phone || params.consent !== 'yes') {
     return response('error', targetOrigin, requestId, attemptId, params.callback);
   }
   if (params.website) return response('success', targetOrigin, requestId, attemptId, params.callback);
@@ -27,10 +27,12 @@ function doPost(e) {
     lock.waitLock(10000);
     const spreadsheet = SpreadsheetApp.openById(sheetId);
     const sheet = spreadsheet.getSheetByName(SHEET_NAME) || spreadsheet.insertSheet(SHEET_NAME);
-    if (sheet.getLastRow() === 0) sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+    prepareLeadSheet(sheet);
 
     const lastRow = sheet.getLastRow();
-    if (lastRow > 1 && sheet.getRange(2, HEADERS.length, lastRow - 1, 1).createTextFinder(requestId).matchEntireCell(true).findNext()) {
+    const headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const requestIdColumn = headerRow.indexOf('Request ID') + 1;
+    if (lastRow > 1 && requestIdColumn > 0 && sheet.getRange(2, requestIdColumn, lastRow - 1, 1).createTextFinder(requestId).matchEntireCell(true).findNext()) {
       return response('success', targetOrigin, requestId, attemptId, params.callback);
     }
 
@@ -39,7 +41,8 @@ function doPost(e) {
       safeCell(params.name),
       safeCell(params.email),
       safeCell(params.company),
-      safeCell(params.phone),
+      safeCell(params.position),
+      normalizePhone(params.phone),
       'Ya',
       finiteNumber(params.downtime),
       finiteNumber(params.downtime_cost_per_hour),
@@ -56,6 +59,41 @@ function doPost(e) {
     return response('error', targetOrigin, requestId, attemptId, params.callback);
   } finally {
     if (lock.hasLock()) lock.releaseLock();
+  }
+}
+
+function normalizePhone(value) {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('0062')) digits = digits.slice(4);
+  else if (digits.startsWith('62')) digits = digits.slice(2);
+  else if (digits.startsWith('0')) digits = digits.slice(1);
+  return digits ? `62${digits}` : '';
+}
+
+function prepareLeadSheet(sheet) {
+  const lastColumn = sheet.getLastColumn();
+  if (lastColumn === 0) {
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+    return;
+  }
+
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  const positionIndex = headers.indexOf('Jabatan');
+  const phoneIndex = headers.indexOf('WhatsApp');
+  if (positionIndex < 0 && phoneIndex >= 0) {
+    sheet.insertColumnBefore(phoneIndex + 1);
+    sheet.getRange(1, phoneIndex + 1).setValues([['Jabatan']]);
+  } else if (positionIndex < 0) {
+    sheet.getRange(1, lastColumn + 1).setValues([['Jabatan']]);
+  }
+
+  const updatedHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const updatedPhoneIndex = updatedHeaders.indexOf('WhatsApp');
+  const lastRow = sheet.getLastRow();
+  if (updatedPhoneIndex >= 0 && lastRow > 1) {
+    const phoneColumn = updatedPhoneIndex + 1;
+    const phones = sheet.getRange(2, phoneColumn, lastRow - 1, 1).getValues();
+    sheet.getRange(2, phoneColumn, lastRow - 1, 1).setValues(phones.map(([phone]) => [normalizePhone(phone)]));
   }
 }
 

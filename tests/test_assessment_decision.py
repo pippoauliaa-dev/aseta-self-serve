@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -11,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER_PATH = "/__assessment_test_runner__.html"
+BROWSER_RUNNER_PATH = "/__assessment_browser_test_runner__.html"
 EXPECTED_NEEDS = {
     "register": "essentials",
     "stock-audit": "essentials",
@@ -60,12 +62,75 @@ RUNNER_HTML = """<!doctype html>
 </script>
 """
 
+BROWSER_FLOW_SCRIPT = r"""<script>
+(() => {
+  const report = {};
+  const main = document.querySelector('main');
+  const assessment = document.querySelector('#assessment');
+  const needs = [...document.querySelectorAll('#assessment input[type="checkbox"][data-need-id]')];
+  const noNeed = document.querySelector('#assessment input[data-no-need]');
+  const submit = document.querySelector('#assessment-submit');
+  const result = document.querySelector('#assessment-result');
+  const title = document.querySelector('#result-plan');
+  const reason = document.querySelector('#result-reason');
+  const validation = document.querySelector('#assessment-validation');
+  report.firstMainSection = main?.querySelector(':scope > section')?.id || null;
+  report.h1Count = document.querySelectorAll('h1').length;
+  report.needIds = needs.map((input) => input.dataset.needId);
+  report.hasNoNeedChoice = Boolean(noNeed);
+  report.hasSubmit = Boolean(submit);
+  report.hasResult = Boolean(result && title && reason);
+  report.hasValidation = Boolean(validation);
+  if (noNeed && needs.length && submit && result && title && reason && validation) {
+    needs[0].click();
+    noNeed.click();
+    report.noNeedClearsFeatures = needs.every((input) => !input.checked);
+    report.noNeedDisablesFeatures = needs.every((input) => input.disabled);
+    noNeed.click();
+    needs[0].click();
+    report.featureClearsNoNeed = !noNeed.checked && needs.every((input) => !input.disabled);
+    needs.forEach((input) => { input.checked = false; });
+    noNeed.checked = false;
+    submit.click();
+    report.emptyValidationVisible = !validation.hidden && Boolean(validation.textContent.trim());
+    report.emptyHasNoRecommendation = result.hidden || !title.textContent.trim();
+    needs.find((input) => input.dataset.needId === 'register').click();
+    submit.click();
+    report.essentialsLabel = title.textContent.trim();
+    report.essentialsReason = reason.textContent.trim();
+    needs.forEach((input) => { input.checked = false; });
+    needs.find((input) => input.dataset.needId === 'depreciation').click();
+    needs.find((input) => input.dataset.needId === 'maintenance').click();
+    submit.click();
+    report.enterpriseLabel = title.textContent.trim();
+    report.enterpriseReason = reason.textContent.trim();
+  }
+  const leadForm = document.querySelector('#simulator-lead-form');
+  report.requiredLeadFields = ['name', 'email', 'company', 'position', 'phone', 'consent']
+    .filter((name) => leadForm?.querySelector(`[name="${name}"]`)?.required);
+  report.preservedIds = ['simulator', 'download-pdf', 'download-status', 'lead-dialog',
+    'simulator-lead-form', 'lead-error', 'lead-next-step', 'share-whatsapp', 'share-pdf',
+    'demo-modal', 'sales-contact-form'].filter((id) => document.getElementById(id));
+  document.body.insertAdjacentHTML('beforeend', `<pre id="assessment-report">${JSON.stringify(report)}</pre>`);
+})();
+</script>
+"""
+
 
 class RunnerHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
     def do_GET(self):
+        if self.path == BROWSER_RUNNER_PATH:
+            html = (ROOT / "index.html").read_text(encoding="utf-8")
+            body = html.replace("</body>", f"{BROWSER_FLOW_SCRIPT}</body>").encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if self.path == RUNNER_PATH:
             body = RUNNER_HTML.encode("utf-8")
             self.send_response(200)
@@ -245,6 +310,62 @@ class AssessmentDecisionTests(unittest.TestCase):
         self.assertIn(rules_tag, index_html)
         self.assertIn(app_tag, index_html)
         self.assertLess(index_html.index(rules_tag), index_html.index(app_tag))
+
+    def test_calculator_first_assessment_browser_flow(self):
+        chrome = chrome_executable()
+        if not chrome:
+            self.skipTest("Google Chrome was not found; set CHROME_PATH to chrome.exe")
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), RunnerHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            url = f"http://127.0.0.1:{server.server_port}{BROWSER_RUNNER_PATH}"
+            with tempfile.TemporaryDirectory(prefix="aseta-assessment-browser-") as profile:
+                process = subprocess.run(
+                    [chrome, "--headless", "--disable-gpu", f"--user-data-dir={profile}", "--dump-dom", url],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    timeout=30,
+                    check=False,
+                )
+            self.assertEqual(process.returncode, 0, process.stderr)
+            parser = ReportParser()
+            parser.feed(process.stdout)
+            self.assertTrue(parser.parts, process.stdout[-2000:])
+            report = json.loads("".join(parser.parts))
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+        self.assertEqual(report["firstMainSection"], "simulator")
+        self.assertEqual(report["h1Count"], 1)
+        self.assertEqual(report["needIds"], list(EXPECTED_NEEDS))
+        self.assertTrue(report["hasNoNeedChoice"])
+        self.assertTrue(report["hasSubmit"])
+        self.assertTrue(report["hasResult"])
+        self.assertTrue(report["hasValidation"])
+        self.assertTrue(report["noNeedClearsFeatures"])
+        self.assertTrue(report["noNeedDisablesFeatures"])
+        self.assertTrue(report["featureClearsNoNeed"])
+        self.assertTrue(report["emptyValidationVisible"])
+        self.assertTrue(report["emptyHasNoRecommendation"])
+        self.assertEqual(report["essentialsLabel"], "Aseta Essentials")
+        self.assertIn("Registrasi/tagging aset", report["essentialsReason"])
+        self.assertEqual(report["enterpriseLabel"], "Aseta Enterprise")
+        self.assertIn("Depresiasi otomatis aset", report["enterpriseReason"])
+        self.assertIn("Preventive/corrective maintenance", report["enterpriseReason"])
+        self.assertEqual(
+            report["requiredLeadFields"],
+            ["name", "email", "company", "position", "phone", "consent"],
+        )
+        self.assertEqual(
+            report["preservedIds"],
+            ["simulator", "download-pdf", "download-status", "lead-dialog", "simulator-lead-form",
+             "lead-error", "lead-next-step", "share-whatsapp", "share-pdf", "demo-modal", "sales-contact-form"],
+        )
 
 
 if __name__ == "__main__":

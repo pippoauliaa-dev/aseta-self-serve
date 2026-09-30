@@ -4,43 +4,41 @@
   const modal = document.querySelector('#demo-modal');
   const openButtons = document.querySelectorAll('[data-open-demo]');
   const closeButtons = document.querySelectorAll('[data-close-demo]');
-  const steps = [...document.querySelectorAll('[data-step]')];
-  const answers = {};
-  let currentStep = 1;
-
-  const updateAssessment = () => {
-    steps.forEach((step) => { step.hidden = Number(step.dataset.step) !== currentStep; });
-    document.querySelector('#step-number').textContent = currentStep;
-    document.querySelector('#progress-bar').style.width = `${currentStep * 20}%`;
-    document.querySelector('#prev-step').hidden = currentStep === 1;
-    document.querySelector('#next-step').textContent = currentStep === steps.length ? 'Lihat rekomendasi' : 'Lanjut →';
-    document.querySelector('#assessment-hint').textContent = 'Pilih satu jawaban untuk melanjutkan.';
+  const assessmentNeeds = [...document.querySelectorAll('#assessment input[data-need-id]')];
+  const noNeedChoice = document.querySelector('#assessment input[data-no-need]');
+  const result = document.querySelector('#assessment-result');
+  const validation = document.querySelector('#assessment-validation');
+  const updateExclusiveChoices = () => {
+    const noNeedSelected = noNeedChoice.checked;
+    assessmentNeeds.forEach((input) => {
+      input.disabled = noNeedSelected;
+      if (noNeedSelected) input.checked = false;
+    });
+    if (assessmentNeeds.some((input) => input.checked)) noNeedChoice.checked = false;
+    result.hidden = true;
+    validation.hidden = true;
   };
-
-  const selectedValue = (step) => document.querySelector(`[data-step="${step}"] input:checked`)?.value;
-
-  const showResult = () => {
-    const large = answers.asset_count === 'large';
-    const distributed = ['many', 'distributed'].includes(answers.locations);
-    const maintenance = answers.goal === 'maintenance' || answers.problem === 'breakdown';
-    const plan = large || distributed ? 'Aseta Scale' : maintenance ? 'Aseta Maintenance' : 'Aseta Foundation';
-    const result = document.querySelector('#assessment-result');
-    document.querySelector('#result-title').textContent = plan === 'Aseta Scale' ? 'Anda memiliki kebutuhan pengelolaan yang terstruktur.' : 'Anda dapat memulai dengan scope yang terukur.';
-    document.querySelector('#result-copy').textContent = plan === 'Aseta Scale' ? 'Jumlah aset atau sebaran operasi Anda menunjukkan bahwa visibilitas terpusat, role, approval, dan reporting akan bernilai besar.' : 'Mulai dari asset register dan satu alur maintenance utama. Validasi manfaatnya sebelum memperluas cakupan ke lokasi atau modul lain.';
-    document.querySelector('#result-plan').textContent = plan;
-    document.querySelector('#result-reason').textContent = plan === 'Aseta Scale' ? 'Prioritaskan dashboard lintas lokasi, maintenance, preventive, dan kontrol akses.' : maintenance ? 'Prioritaskan preventive schedule, maintenance, overdue, dan riwayat pekerjaan.' : 'Prioritaskan asset register, lokasi, dokumen, dan struktur data yang rapi.';
+  assessmentNeeds.forEach((input) => input.addEventListener('change', updateExclusiveChoices));
+  noNeedChoice?.addEventListener('change', updateExclusiveChoices);
+  document.querySelector('#assessment-submit')?.addEventListener('click', () => {
+    const selectedIds = assessmentNeeds.filter((input) => input.checked).map((input) => input.dataset.needId);
+    const decision = window.AsetaAssessment.evaluate(selectedIds, noNeedChoice.checked);
+    if (!decision.valid) {
+      result.hidden = true;
+      validation.textContent = 'Pilih minimal satu kebutuhan, atau pilih bahwa Anda belum membutuhkan Aseta.';
+      validation.hidden = false;
+      return;
+    }
+    const labels = {
+      enterprise: 'Aseta Enterprise',
+      essentials: 'Aseta Essentials',
+      'not-needed': 'Belum membutuhkan Aseta'
+    };
+    document.querySelector('#result-plan').textContent = labels[decision.recommendation];
+    document.querySelector('#result-reason').textContent = decision.reasons.join(' ');
+    validation.hidden = true;
     result.hidden = false;
-    result.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  };
-
-  document.querySelector('#next-step')?.addEventListener('click', () => {
-    const value = selectedValue(currentStep);
-    if (!value) { document.querySelector('#assessment-hint').textContent = 'Pilih salah satu jawaban terlebih dahulu.'; return; }
-    answers[steps[currentStep - 1].querySelector('input').name] = value;
-    if (currentStep < steps.length) { currentStep += 1; updateAssessment(); } else showResult();
   });
-  document.querySelector('#prev-step')?.addEventListener('click', () => { if (currentStep > 1) { currentStep -= 1; updateAssessment(); } });
-  document.querySelector('#try-again')?.addEventListener('click', () => { currentStep = 1; Object.keys(answers).forEach((key) => { delete answers[key]; }); document.querySelectorAll('input[type="radio"]').forEach((input) => { input.checked = false; }); document.querySelector('#assessment-result').hidden = true; updateAssessment(); document.querySelector('#assessment').scrollIntoView({ behavior: 'smooth', block: 'center' }); });
 
   const setModal = (open) => { modal.hidden = !open; document.body.classList.toggle('modal-open', open); if (open) { renderDemo(); modal.querySelector('.modal-close')?.focus(); } };
   openButtons.forEach((button) => button.addEventListener('click', () => setModal(true)));

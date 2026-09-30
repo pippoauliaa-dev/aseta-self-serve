@@ -1,6 +1,7 @@
 import html.parser
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -366,6 +367,51 @@ class AssessmentDecisionTests(unittest.TestCase):
             ["simulator", "download-pdf", "download-status", "lead-dialog", "simulator-lead-form",
              "lead-error", "lead-next-step", "share-whatsapp", "share-pdf", "demo-modal", "sales-contact-form"],
         )
+
+
+    def test_generate_decision_map_pdf(self):
+        chrome = chrome_executable()
+        if not chrome:
+            self.skipTest("Google Chrome was not found; set CHROME_PATH to chrome.exe")
+
+        generator = ROOT / "tools" / "generate_assessment_decision_map.py"
+        with tempfile.TemporaryDirectory(prefix="aseta-decision-map-") as tmp:
+            tmp_path = Path(tmp)
+            pdf_path = tmp_path / "decision-map.pdf"
+            html_path = tmp_path / "decision-map.html"
+            process = subprocess.run(
+                [sys.executable, str(generator), "--output", str(pdf_path), "--html-output", str(html_path)],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=120,
+                check=False,
+            )
+            self.assertEqual(process.returncode, 0, process.stderr or process.stdout)
+            self.assertTrue(pdf_path.is_file(), "generator did not write the PDF")
+            pdf_header = pdf_path.read_bytes()[:5]
+            self.assertEqual(pdf_header, b"%PDF-")
+            self.assertGreater(pdf_path.stat().st_size, 50_000, "PDF is suspiciously small")
+            self.assertTrue(html_path.is_file(), "generator did not write the diagnostic HTML")
+
+            with tempfile.TemporaryDirectory(prefix="aseta-decision-map-profile-") as profile:
+                rendered = subprocess.run(
+                    [chrome, "--headless", "--disable-gpu", f"--user-data-dir={profile}",
+                     "--dump-dom", html_path.as_uri()],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    timeout=60,
+                    check=False,
+                )
+            self.assertEqual(rendered.returncode, 0, rendered.stderr)
+            body_without_scripts = re.sub(r"<script>.*?</script>", "", rendered.stdout, flags=re.S)
+            self.assertEqual(body_without_scripts.count('data-state-row="1"'), 513, "expected 513 state rows")
+            for fragment in (
+                "496", "15", "Aseta Enterprise", "Aseta Essentials",
+                "Belum membutuhkan Aseta", "invalid",
+            ):
+                self.assertIn(fragment, rendered.stdout)
 
 
 if __name__ == "__main__":

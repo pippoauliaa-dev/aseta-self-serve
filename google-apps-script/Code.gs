@@ -5,7 +5,8 @@ const HEADERS = [
   'Timestamp', 'Nama', 'Email perusahaan', 'Perusahaan', 'Jabatan', 'WhatsApp', 'Persetujuan',
   'Downtime per bulan (jam)', 'Biaya downtime per jam (Rp)', 'Biaya perbaikan reaktif per bulan (Rp)',
   'Target pengurangan breakdown (%)', 'Estimasi kerugian tahunan (Rp)',
-  'Potensi penghematan simulasi per tahun (Rp)', 'Source', 'Request ID'
+  'Potensi penghematan simulasi per tahun (Rp)', 'Source',
+  'UTM Source', 'UTM Medium', 'UTM Campaign', 'UTM Content', 'UTM Term', 'Meta Click ID', 'Request ID'
 ];
 
 function doPost(e) {
@@ -51,6 +52,12 @@ function doPost(e) {
       finiteNumber(params.annual_loss),
       finiteNumber(params.annual_saving),
       safeCell(targetOrigin),
+      safeCell(params.utm_source),
+      safeCell(params.utm_medium),
+      safeCell(params.utm_campaign),
+      safeCell(params.utm_content),
+      safeCell(params.utm_term),
+      safeCell(params.fbclid),
       requestId
     ]);
     return response('success', targetOrigin, requestId, attemptId, params.callback);
@@ -88,7 +95,22 @@ function prepareLeadSheet(sheet) {
   }
 
   const updatedHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const updatedPhoneIndex = updatedHeaders.indexOf('WhatsApp');
+  const requestIdIndex = updatedHeaders.indexOf('Request ID');
+  if (requestIdIndex >= 0) {
+    const attributionHeaders = HEADERS.slice(HEADERS.indexOf('UTM Source'), HEADERS.indexOf('Request ID'));
+    const missingHeaders = attributionHeaders.filter(header => !updatedHeaders.includes(header));
+    if (missingHeaders.length) {
+      const insertionColumn = requestIdIndex + 1;
+      missingHeaders.forEach((header, index) => {
+        const column = insertionColumn + index;
+        sheet.insertColumnBefore(column);
+        sheet.getRange(1, column).setValues([[header]]);
+      });
+    }
+  }
+
+  const finalHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const updatedPhoneIndex = finalHeaders.indexOf('WhatsApp');
   const lastRow = sheet.getLastRow();
   if (updatedPhoneIndex >= 0 && lastRow > 1) {
     const phoneColumn = updatedPhoneIndex + 1;

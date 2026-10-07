@@ -75,7 +75,9 @@ BROWSER_FLOW_SCRIPT = r"""<script>
   const title = document.querySelector('#result-plan');
   const reason = document.querySelector('#result-reason');
   const validation = document.querySelector('#assessment-validation');
-  report.firstMainSection = main?.querySelector(':scope > section')?.id || null;
+  const firstSection = [...(main?.children || [])].find((child) => child.tagName === 'SECTION');
+  report.firstMainSection = firstSection?.id || (firstSection?.classList.contains('conversion-intro') ? 'conversion-intro' : null);
+  if (!report.firstMainSection && document.querySelector('main > .conversion-intro')) report.firstMainSection = 'conversion-intro';
   report.h1Count = document.querySelectorAll('h1').length;
   report.needIds = needs.map((input) => input.dataset.needId);
   report.hasNoNeedChoice = Boolean(noNeed);
@@ -83,25 +85,36 @@ BROWSER_FLOW_SCRIPT = r"""<script>
   report.hasResult = Boolean(result && title && reason);
   report.hasValidation = Boolean(validation);
   if (noNeed && needs.length && submit && result && title && reason && validation) {
-    needs[0].click();
+    document.querySelector('#assessment-next').click();
+    document.querySelector('#assessment-next').click();
+    report.emptyValidationVisible = !validation.hidden && Boolean(validation.textContent.trim());
+    report.emptyHasNoRecommendation = result.hidden || !title.textContent.trim();
+    document.querySelector('#assessment-back').click();
     noNeed.click();
     report.noNeedClearsFeatures = needs.every((input) => !input.checked);
     report.noNeedDisablesFeatures = needs.every((input) => input.disabled);
     noNeed.click();
-    needs[0].click();
     report.featureClearsNoNeed = !noNeed.checked && needs.every((input) => !input.disabled);
-    needs.forEach((input) => { input.checked = false; });
-    noNeed.checked = false;
-    submit.click();
-    report.emptyValidationVisible = !validation.hidden && Boolean(validation.textContent.trim());
-    report.emptyHasNoRecommendation = result.hidden || !title.textContent.trim();
+    document.querySelector('#assessment-back').click();
     needs.find((input) => input.dataset.needId === 'register').click();
+    document.querySelector('#assessment-next').click();
+    document.querySelector('#assessment-next').click();
+    document.querySelector('#profile-assets').value = '201–1.000';
+    document.querySelector('#profile-system').value = 'Spreadsheet (Excel/Google Sheets)';
+    document.querySelector('#profile-branches').value = '2–5 cabang';
     submit.click();
     report.essentialsLabel = title.textContent.trim();
     report.essentialsReason = reason.textContent.trim();
-    needs.forEach((input) => { input.checked = false; });
+    document.querySelector('#assessment-back').click();
+    document.querySelector('#assessment-back').click();
+    needs.find((input) => input.dataset.needId === 'register').click();
     needs.find((input) => input.dataset.needId === 'depreciation').click();
     needs.find((input) => input.dataset.needId === 'maintenance').click();
+    document.querySelector('#assessment-next').click();
+    document.querySelector('#assessment-next').click();
+    document.querySelector('#profile-assets').value = '201–1.000';
+    document.querySelector('#profile-system').value = 'Spreadsheet (Excel/Google Sheets)';
+    document.querySelector('#profile-branches').value = '2–5 cabang';
     submit.click();
     report.enterpriseLabel = title.textContent.trim();
     report.enterpriseReason = reason.textContent.trim();
@@ -125,6 +138,7 @@ class RunnerHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == BROWSER_RUNNER_PATH:
             html = (ROOT / "index.html").read_text(encoding="utf-8")
+            html = html.replace('<script src="aseta-self-serve-v2.js"></script>', '<script src="/aseta-self-serve-v2.js"></script>')
             body = html.replace("</body>", f"{BROWSER_FLOW_SCRIPT}</body>").encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -307,7 +321,7 @@ class AssessmentDecisionTests(unittest.TestCase):
 
         index_html = (ROOT / "index.html").read_text(encoding="utf-8")
         rules_tag = '<script src="aseta-assessment-rules.js"></script>'
-        app_tag = '<script src="aseta-self-serve.js"></script>'
+        app_tag = '<script src="aseta-self-serve-v2.js"></script>'
         self.assertIn(rules_tag, index_html)
         self.assertIn(app_tag, index_html)
         self.assertLess(index_html.index(rules_tag), index_html.index(app_tag))
@@ -341,7 +355,7 @@ class AssessmentDecisionTests(unittest.TestCase):
             server.server_close()
             thread.join()
 
-        self.assertEqual(report["firstMainSection"], "simulator")
+        self.assertEqual(report["firstMainSection"], "conversion-intro")
         self.assertEqual(report["h1Count"], 1)
         self.assertEqual(report["needIds"], list(EXPECTED_NEEDS))
         self.assertTrue(report["hasNoNeedChoice"])
